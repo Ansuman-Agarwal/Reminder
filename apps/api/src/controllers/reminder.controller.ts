@@ -1,12 +1,6 @@
 import z from "zod";
-import {
-  adminProcedure,
-  protectedProcedure,
-  publicProcedure,
-  router,
-} from "../context.trpc";
+import { protectedProcedure, router } from "../context.trpc";
 import { db } from "../db/db.config";
-import { upsertUser } from "../services/user.service";
 
 export const reminderController = router({
   getAllReminder: protectedProcedure.query(async ({ ctx }) => {
@@ -20,7 +14,7 @@ export const reminderController = router({
     .input(
       z.object({
         title: z.string().min(1, "Title is required"),
-        description: z.string().optional(),
+        description: z.string().nullable(),
         timezone: z.string().min(1, "Timezone is required"),
         dateTime: z.string(),
       })
@@ -42,7 +36,7 @@ export const reminderController = router({
       z.object({
         id: z.string().min(1, "Id is required"),
         title: z.string().min(1, "Title is required"),
-        description: z.string().optional(),
+        description: z.string().nullable(),
         timezone: z.string().min(1, "Timezone is required"),
         dateTime: z.string(),
       })
@@ -50,7 +44,6 @@ export const reminderController = router({
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
       const reminder = await db.reminder
-        .select()
         .where({ id: input.id })
         .update({
           title: input.title,
@@ -67,11 +60,7 @@ export const reminderController = router({
     .input(z.object({ id: z.string().min(1, "Id is required") }))
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
-      const reminder = await db.reminder
-        .select()
-        .where({ id: input.id })
-        .delete()
-        .where({ id: input.id });
+      const reminder = await db.reminder.where({ id: input.id }).delete();
       return reminder;
     }),
 });

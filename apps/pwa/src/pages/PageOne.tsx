@@ -1,5 +1,8 @@
+import React, { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
-// @mui
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import {
   Box,
   Button,
@@ -20,46 +23,51 @@ import {
   InputLabel,
   Snackbar,
   Alert,
+  CircularProgress,
 } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
-import { z } from "zod";
-import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import * as z from "zod";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import { trpcFetch } from "@/trpc/trpcFetch";
 
-// ----------------------------------------------------------------------
+// Extend dayjs with UTC and timezone plugins
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
-// Define the schema for a reminder
+// Validation schema
 const ReminderSchema = z.object({
   id: z.string().optional(),
   title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
+  description: z.string().nullable(),
   timezone: z.string().min(1, "Timezone is required"),
-  dateTime: z.date(),
+  dateTime: z.string(),
 });
 
 type ReminderType = z.infer<typeof ReminderSchema>;
 
-// Mock data
-const mockReminders: ReminderType[] = [
-  {
-    id: "1",
-    title: "Team Meeting",
-    description: "Weekly team sync",
-    timezone: "UTC",
-    dateTime: new Date("2023-06-15T10:00:00Z"),
-  },
-  {
-    id: "2",
-    title: "Dentist Appointment",
-    description: "Regular checkup",
-    timezone: "EST",
-    dateTime: new Date("2023-06-20T14:30:00Z"),
-  },
+// Common timezones
+const commonTimezones = [
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Toronto",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Tokyo",
+  "Asia/Shanghai",
+  "Asia/Kolkata",
+  "Asia/Dubai",
+  "Australia/Sydney",
+  "Pacific/Auckland",
 ];
 
-export default function PageOne() {
-  const [reminders, setReminders] = useState<ReminderType[]>(mockReminders);
+export default function ReminderPage() {
+  const [reminders, setReminders] = useState<ReminderType[]>([]);
   const [editingReminder, setEditingReminder] = useState<ReminderType | null>(
     null
   );
@@ -68,51 +76,90 @@ export default function PageOne() {
     message: "",
     severity: "success" as "success" | "error",
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const defaultValues = {
+    title: "",
+    description: "",
+    timezone: "",
+    dateTime: dayjs().format(),
+  };
 
   const {
     control,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<ReminderType>({
     resolver: zodResolver(ReminderSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      timezone: "",
-      dateTime: new Date(),
-    },
+    defaultValues,
   });
 
+  const selectedTimezone = watch("timezone");
+
+  // Fetch reminders on load
   useEffect(() => {
-    console.log("Fetching reminders...");
-    setReminders(mockReminders);
+    const fetchReminders = async () => {
+      try {
+        const data = await trpcFetch.reminder.getAllReminder.query();
+        setReminders(data);
+      } catch (error) {
+        console.error("Error fetching reminders:", error);
+        setSnackbar({
+          open: true,
+          message: "Failed to fetch reminders",
+          severity: "error",
+        });
+      }
+    };
+    fetchReminders();
   }, []);
 
-  const onSubmit = (values: ReminderType) => {
-    if (editingReminder) {
-      const updatedReminders = reminders.map((reminder) =>
-        reminder.id === editingReminder.id
-          ? { ...reminder, ...values }
-          : reminder
-      );
+  const onSubmit = async (values: ReminderType) => {
+    console.log("Submitting reminder:", values);
+    setIsSubmitting(true);
+    try {
+      if (editingReminder) {
+        await trpcFetch.reminder.updaeReminder.mutate({
+          dateTime: values.dateTime,
+          description: values.description || "",
+          id: editingReminder.id!,
+          title: values.title,
+          timezone: values.timezone,
+        });
+        setSnackbar({
+          open: true,
+          message: "Reminder updated!",
+          severity: "success",
+        });
+        setEditingReminder(null);
+      } else {
+        const newReminder = await trpcFetch.reminder.addReminder.mutate({
+          ...values,
+          description: values.description || "",
+        });
+        console.log("New reminder:", newReminder);
+        setSnackbar({
+          open: true,
+          message: "Reminder added!",
+          severity: "success",
+        });
+      }
+      reset(defaultValues);
+      // Refetch reminders after mutation
+      const updatedReminders = await trpcFetch.reminder.getAllReminder.query();
       setReminders(updatedReminders);
+    } catch (error) {
+      console.error("Error submitting reminder:", error);
       setSnackbar({
         open: true,
-        message: "Reminder updated!",
-        severity: "success",
+        message: "Failed to save reminder",
+        severity: "error",
       });
-      setEditingReminder(null);
-    } else {
-      const newReminder = { ...values, id: Date.now().toString() };
-      setReminders([...reminders, newReminder]);
-      setSnackbar({
-        open: true,
-        message: "Reminder added!",
-        severity: "success",
-      });
+    } finally {
+      setIsSubmitting(false);
     }
-    reset();
   };
 
   const handleEdit = (reminder: ReminderType) => {
@@ -120,19 +167,29 @@ export default function PageOne() {
     reset(reminder);
   };
 
-  const handleDelete = (id: string) => {
-    setReminders(reminders.filter((reminder) => reminder.id !== id));
-    setSnackbar({
-      open: true,
-      message: "Reminder deleted!",
-      severity: "success",
-    });
+  const handleDelete = async (id: string) => {
+    try {
+      await trpcFetch.reminder.deleteReminder.mutate({ id });
+      setReminders(reminders.filter((reminder) => reminder.id !== id));
+      setSnackbar({
+        open: true,
+        message: "Reminder deleted!",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error deleting reminder:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to delete reminder",
+        severity: "error",
+      });
+    }
   };
 
   return (
     <>
       <Helmet>
-        <title> Page One | fastfy-react-starter</title>
+        <title>Reminder Settings | My App</title>
       </Helmet>
 
       <Container maxWidth="xl">
@@ -178,9 +235,11 @@ export default function PageOne() {
                     <FormControl error={!!errors.timezone}>
                       <InputLabel>Timezone</InputLabel>
                       <Select {...field} label="Timezone">
-                        <MenuItem value="UTC">UTC</MenuItem>
-                        <MenuItem value="EST">EST</MenuItem>
-                        <MenuItem value="PST">PST</MenuItem>
+                        {commonTimezones.map((tz) => (
+                          <MenuItem key={tz} value={tz}>
+                            {tz}
+                          </MenuItem>
+                        ))}
                       </Select>
                       {errors.timezone && (
                         <Typography variant="caption" color="error">
@@ -190,25 +249,47 @@ export default function PageOne() {
                     </FormControl>
                   )}
                 />
-                {/* <Controller
+                <Controller
                   name="dateTime"
                   control={control}
                   render={({ field }) => (
-                    <DateTimePicker
-                      label="Date and Time"
-                      {...field}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          error: !!errors.dateTime,
-                          helperText: errors.dateTime?.message,
-                        },
-                      }}
-                    />
-                  )} */}
-                {/* /> */}
-                <Button type="submit" variant="contained" color="primary">
-                  {editingReminder ? "Update Reminder" : "Add Reminder"}
+                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+                      <DateTimePicker
+                        label="Date and Time"
+                        value={dayjs(field.value)}
+                        onChange={(newValue) =>
+                          field.onChange(
+                            newValue?.tz(selectedTimezone).format()
+                          )
+                        }
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            error: !!errors.dateTime,
+                            helperText: errors.dateTime?.message,
+                          },
+                          inputAdornment: {
+                            position: "end",
+                          },
+                        }}
+                        disablePast
+                      />
+                    </LocalizationProvider>
+                  )}
+                />
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <CircularProgress size={24} />
+                  ) : editingReminder ? (
+                    "Update Reminder"
+                  ) : (
+                    "Add Reminder"
+                  )}
                 </Button>
               </Box>
             </form>
@@ -234,7 +315,9 @@ export default function PageOne() {
                       <TableCell>{reminder.description}</TableCell>
                       <TableCell>{reminder.timezone}</TableCell>
                       <TableCell>
-                        {reminder.dateTime.toLocaleString()}
+                        {dayjs(reminder.dateTime).format(
+                          "YYYY-MM-DD HH:mm:ss Z"
+                        )}
                       </TableCell>
                       <TableCell>
                         <Button

@@ -13,10 +13,7 @@ export class ReminderTable extends BaseTable {
     description: t.string().nullable(),
     timezone: t.string(),
     dateTime: t.string(),
-    userId: t
-      .uuid()
-      .foreignKey(() => UserTable, "id")
-      .unique(),
+    userId: t.uuid().foreignKey(() => UserTable, "id"),
     createdAt: t.timestamps().createdAt.nullable(),
     updatedAt: t.timestamps().updatedAt.nullable(),
   }));

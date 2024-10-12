@@ -2,6 +2,7 @@ import { inferRouterOutputs } from "@trpc/server";
 // import * as packageJson from "../package.json";
 import { publicProcedure, router } from "./context.trpc";
 import { authApi } from "./auth/auth-api";
+import { reminderController } from "./controllers/reminder.controller";
 
 export const trpcRouter = router({
   auth: authApi,
@@ -12,6 +13,7 @@ export const trpcRouter = router({
     // forceUpdateBelowFrontendVersion:
     // packageJson.force_update_below_frontend_version,
   })),
+  reminder: reminderController,
 });
 
 // export type definition of API
