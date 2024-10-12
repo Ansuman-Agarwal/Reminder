@@ -1,6 +1,7 @@
 import { orchidORM } from "orchid-orm";
 import { env, isTest } from "../configs/env.config";
 import { UserTable } from "./tables/user.table";
+import { ReminderTable } from "./tables/reminder.table";
 
 export const db = orchidORM(
   {
@@ -11,5 +12,6 @@ export const db = orchidORM(
   },
   {
     user: UserTable,
+    reminder: ReminderTable,
   }
 );

@@ -1,9 +1,15 @@
-import React, { createContext, useState, useCallback, useMemo, useEffect } from 'react';
+import React, {
+  createContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "react";
 import { usePostHog } from "posthog-js/react";
-import { trpc } from '@/trpc/trpc';
-import { AuthContextType, AuthStateType } from '@/auth/types';
-import localStorageAvailable from '@/utils/localStorageAvailable';
-import { trpcFetch } from '@/trpc/trpcFetch';
+import { trpc } from "@/trpc/trpc";
+import { AuthContextType, AuthStateType } from "@/auth/types";
+import localStorageAvailable from "@/utils/localStorageAvailable";
+import { trpcFetch } from "@/trpc/trpcFetch";
 
 // ----------------------------------------------------------------------
 
@@ -13,9 +19,13 @@ const initialState: AuthStateType = {
   user: null,
 };
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [authState, setAuthState] = useState<AuthStateType>(initialState);
   const posthog = usePostHog();
   const utils = trpc.useUtils();
@@ -23,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const initialize = useCallback(async () => {
     if (location.pathname === "/auth/login") {
-      return setAuthState(prev => ({ ...prev, isInitialized: true }));
+      return setAuthState((prev) => ({ ...prev, isInitialized: true }));
     }
 
     const profile = await trpcFetch.auth.profile.query().catch(() => null);
@@ -63,16 +73,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(() => {
-    trpc.auth.logout.useMutation({
-      onSuccess() {
-        utils.auth.profile.reset();
-        setAuthState({
-          isInitialized: true,
-          isAuthenticated: false,
-          user: null,
-        });
-      },
-    })
+    trpcFetch.auth.logout.mutate().then(() => {
+      utils.auth.profile.reset();
+      setAuthState({
+        isInitialized: true,
+        isAuthenticated: false,
+        user: null,
+      });
+    });
   }, []);
 
   const memoizedValue = useMemo(
@@ -83,9 +91,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       logout,
     }),
-    [authState.isAuthenticated, authState.isInitialized, authState.user, login, logout]
+    [
+      authState.isAuthenticated,
+      authState.isInitialized,
+      authState.user,
+      login,
+      logout,
+    ]
   );
 
-  return <AuthContext.Provider value={memoizedValue}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={memoizedValue}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
-
