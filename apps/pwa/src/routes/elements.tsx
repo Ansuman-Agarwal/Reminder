@@ -19,4 +19,6 @@ export const LoginPage = Loadable(
 
 export const PageOne = Loadable(lazy(() => import("../pages/PageOne")));
 
+export const ProfilePage = Loadable(lazy(() => import("../pages/Profilepage")));
+
 export const Page404 = Loadable(lazy(() => import("../pages/Page404")));

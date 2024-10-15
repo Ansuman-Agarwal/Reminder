@@ -3,8 +3,10 @@ import { inferRouterOutputs } from "@trpc/server";
 import { publicProcedure, router } from "./context.trpc";
 import { authApi } from "./auth/auth-api";
 import { reminderController } from "./controllers/reminder.controller";
+import { userController } from "./controllers/user.controller";
 
 export const trpcRouter = router({
+  user: userController,
   auth: authApi,
   version: publicProcedure.query(() => ({
     // beVersion: packageJson.version,

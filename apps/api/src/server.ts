@@ -3,7 +3,8 @@ import helmet from "@fastify/helmet";
 import sensible from "@fastify/sensible";
 import { app } from "./app";
 import { env } from "./configs/env.config";
-import { googleAuth } from "./auth/google-auth";
+import schedule from "node-schedule";
+import { db } from "./db/db.config";
 
 export const server = app;
 
@@ -17,7 +18,15 @@ server
     credentials: true,
   })
   .register(helmet)
-  .register(sensible)
+  .register(sensible);
+
+const job = schedule.scheduleJob("* * * * *", async function () {
+  const pendingReminders = await db.reminder
+    .selectAll()
+    .where({ status: "pending" });
+  console.log(pendingReminders);
+  server.log.info("Jay is a good boy");
+});
 
 // Run the server!
 server.listen({ port: port, host: "0.0.0.0" }, function (err, address) {

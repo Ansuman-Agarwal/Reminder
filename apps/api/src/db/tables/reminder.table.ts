@@ -13,9 +13,12 @@ export class ReminderTable extends BaseTable {
     description: t.string().nullable(),
     timezone: t.string(),
     dateTime: t.string(),
+    status: t
+      .enum("status", ["pending", "completed", "failed"])
+      .default("pending"),
     userId: t.uuid().foreignKey(() => UserTable, "id"),
-    createdAt: t.timestamps().createdAt.nullable(),
-    updatedAt: t.timestamps().updatedAt.nullable(),
+    createdAt: t.timestamps().createdAt,
+    updatedAt: t.timestamps().updatedAt,
   }));
 
   relations = {

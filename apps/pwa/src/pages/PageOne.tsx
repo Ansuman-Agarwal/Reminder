@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import ModeEditIcon from "@mui/icons-material/ModeEdit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
 import {
   Box,
   Button,
   Card,
   CardContent,
-  CardHeader,
   Container,
   FormControl,
   MenuItem,
@@ -24,6 +26,11 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Chip,
 } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,7 +39,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { trpcFetch } from "@/trpc/trpcFetch";
-
+import { useMediaQuery } from "react-responsive";
 // Extend dayjs with UTC and timezone plugins
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -46,7 +53,9 @@ const ReminderSchema = z.object({
   dateTime: z.string(),
 });
 
-type ReminderType = z.infer<typeof ReminderSchema>;
+interface ReminderType extends z.infer<typeof ReminderSchema> {
+  status: "pending" | "completed" | "failed";
+}
 
 // Common timezones
 const commonTimezones = [
@@ -71,6 +80,7 @@ export default function ReminderPage() {
   const [editingReminder, setEditingReminder] = useState<ReminderType | null>(
     null
   );
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -97,6 +107,13 @@ export default function ReminderPage() {
   });
 
   const selectedTimezone = watch("timezone");
+  const isMobile = useMediaQuery({ maxWidth: 767 });
+
+  const truncateText = (text: string, maxLength: number) => {
+    return text.length > maxLength
+      ? `${text.substring(0, maxLength)}...`
+      : text;
+  };
 
   // Fetch reminders on load
   useEffect(() => {
@@ -117,7 +134,6 @@ export default function ReminderPage() {
   }, []);
 
   const onSubmit = async (values: ReminderType) => {
-    console.log("Submitting reminder:", values);
     setIsSubmitting(true);
     try {
       if (editingReminder) {
@@ -133,13 +149,11 @@ export default function ReminderPage() {
           message: "Reminder updated!",
           severity: "success",
         });
-        setEditingReminder(null);
       } else {
-        const newReminder = await trpcFetch.reminder.addReminder.mutate({
+        await trpcFetch.reminder.addReminder.mutate({
           ...values,
           description: values.description || "",
         });
-        console.log("New reminder:", newReminder);
         setSnackbar({
           open: true,
           message: "Reminder added!",
@@ -147,6 +161,8 @@ export default function ReminderPage() {
         });
       }
       reset(defaultValues);
+      setIsDialogOpen(false);
+      setEditingReminder(null);
       // Refetch reminders after mutation
       const updatedReminders = await trpcFetch.reminder.getAllReminder.query();
       setReminders(updatedReminders);
@@ -165,6 +181,7 @@ export default function ReminderPage() {
   const handleEdit = (reminder: ReminderType) => {
     setEditingReminder(reminder);
     reset(reminder);
+    setIsDialogOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -186,6 +203,18 @@ export default function ReminderPage() {
     }
   };
 
+  const handleOpenDialog = () => {
+    reset(defaultValues);
+    setEditingReminder(null);
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingReminder(null);
+    reset(defaultValues);
+  };
+
   return (
     <>
       <Helmet>
@@ -193,156 +222,213 @@ export default function ReminderPage() {
       </Helmet>
 
       <Container maxWidth="xl">
-        <Card sx={{ maxWidth: 800, margin: "auto", mt: 4 }}>
-          <CardHeader
-            title={
-              <Typography variant="h4" align="center">
-                📅 Reminder Settings
-              </Typography>
-            }
-          />
+        <Card sx={{ margin: "auto", mt: 4, overflowX: "auto" }}>
           <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <Controller
-                  name="title"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="Title"
-                      error={!!errors.title}
-                      helperText={errors.title?.message}
-                    />
-                  )}
-                />
-                <Controller
-                  name="description"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="Description"
-                      multiline
-                      rows={3}
-                    />
-                  )}
-                />
-                <Controller
-                  name="timezone"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControl error={!!errors.timezone}>
-                      <InputLabel>Timezone</InputLabel>
-                      <Select {...field} label="Timezone">
-                        {commonTimezones.map((tz) => (
-                          <MenuItem key={tz} value={tz}>
-                            {tz}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      {errors.timezone && (
-                        <Typography variant="caption" color="error">
-                          {errors.timezone.message}
-                        </Typography>
-                      )}
-                    </FormControl>
-                  )}
-                />
-                <Controller
-                  name="dateTime"
-                  control={control}
-                  render={({ field }) => (
-                    <LocalizationProvider dateAdapter={AdapterDayjs}>
-                      <DateTimePicker
-                        label="Date and Time"
-                        value={dayjs(field.value)}
-                        onChange={(newValue) =>
-                          field.onChange(
-                            newValue?.tz(selectedTimezone).format()
-                          )
-                        }
-                        slotProps={{
-                          textField: {
-                            fullWidth: true,
-                            error: !!errors.dateTime,
-                            helperText: errors.dateTime?.message,
-                          },
-                          inputAdornment: {
-                            position: "end",
-                          },
-                        }}
-                        disablePast
-                      />
-                    </LocalizationProvider>
-                  )}
-                />
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <CircularProgress size={24} />
-                  ) : editingReminder ? (
-                    "Update Reminder"
-                  ) : (
-                    "Add Reminder"
-                  )}
-                </Button>
-              </Box>
-            </form>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 2,
+                flexDirection: isMobile ? "column" : "row",
+                gap: isMobile ? 2 : 0,
+              }}
+            >
+              <Typography variant="h4">📅 Reminder Settings</Typography>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleOpenDialog}
+              >
+                Add Reminder
+              </Button>
+            </Box>
 
-            <Box sx={{ mt: 4 }}>
-              <Typography variant="h5" sx={{ mb: 2 }}>
-                Your Reminders
-              </Typography>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Title</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell>Timezone</TableCell>
-                    <TableCell>Date & Time</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {reminders.map((reminder) => (
-                    <TableRow key={reminder.id}>
-                      <TableCell>{reminder.title}</TableCell>
-                      <TableCell>{reminder.description}</TableCell>
-                      <TableCell>{reminder.timezone}</TableCell>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Title</TableCell>
+                  {!isMobile && <TableCell>Description</TableCell>}
+                  {!isMobile && <TableCell>Timezone</TableCell>}
+                  <TableCell>Date & Time</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {reminders.map((reminder) => (
+                  <TableRow key={reminder.id}>
+                    <TableCell>{truncateText(reminder.title, 20)}</TableCell>
+                    {!isMobile && (
                       <TableCell>
-                        {dayjs(reminder.dateTime).format(
-                          "YYYY-MM-DD HH:mm:ss Z"
-                        )}
+                        {truncateText(reminder.description || "", 30)}
                       </TableCell>
-                      <TableCell>
+                    )}
+                    {!isMobile && <TableCell>{reminder.timezone}</TableCell>}
+                    <TableCell>
+                      {dayjs(reminder.dateTime).format(
+                        isMobile ? "MM/DD/YY HH:mm" : "YYYY-MM-DD HH:mm:ss Z"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={reminder.status}
+                        color={
+                          reminder.status === "completed"
+                            ? "success"
+                            : reminder.status === "failed"
+                              ? "error"
+                              : "warning"
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: isMobile ? "column" : "row",
+                          gap: 1,
+                        }}
+                      >
                         <Button
+                          disabled={reminder.status !== "pending"}
                           onClick={() => handleEdit(reminder)}
                           variant="outlined"
-                          sx={{ mr: 1 }}
+                          size={isMobile ? "small" : "medium"}
+                          startIcon={<ModeEditIcon />}
                         >
                           Edit
                         </Button>
                         <Button
                           onClick={() => handleDelete(reminder.id!)}
                           variant="contained"
-                          color="secondary"
+                          color="error"
+                          size={isMobile ? "small" : "medium"}
+                          startIcon={<DeleteIcon />}
                         >
                           Delete
                         </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Box>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </Container>
+
+      <Dialog
+        open={isDialogOpen}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <DialogTitle>
+            {editingReminder ? "Edit Reminder" : "Add New Reminder"}
+          </DialogTitle>
+          <DialogContent>
+            <Box
+              sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}
+            >
+              <Controller
+                name="title"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Title"
+                    error={!!errors.title}
+                    helperText={errors.title?.message}
+                    fullWidth
+                  />
+                )}
+              />
+              <Controller
+                name="description"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Description"
+                    multiline
+                    rows={3}
+                    fullWidth
+                  />
+                )}
+              />
+              <Controller
+                name="timezone"
+                control={control}
+                render={({ field }) => (
+                  <FormControl error={!!errors.timezone} fullWidth>
+                    <InputLabel>Timezone</InputLabel>
+                    <Select {...field} label="Timezone">
+                      {commonTimezones.map((tz) => (
+                        <MenuItem key={tz} value={tz}>
+                          {tz}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.timezone && (
+                      <Typography variant="caption" color="error">
+                        {errors.timezone.message}
+                      </Typography>
+                    )}
+                  </FormControl>
+                )}
+              />
+              <Controller
+                name="dateTime"
+                control={control}
+                render={({ field }) => (
+                  <LocalizationProvider dateAdapter={AdapterDayjs}>
+                    <DateTimePicker
+                      label="Date and Time"
+                      value={dayjs(field.value)}
+                      onChange={(newValue) =>
+                        field.onChange(newValue?.tz(selectedTimezone).format())
+                      }
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          error: !!errors.dateTime,
+                          helperText: errors.dateTime?.message,
+                        },
+                        inputAdornment: {
+                          position: "end",
+                        },
+                      }}
+                      disablePast
+                    />
+                  </LocalizationProvider>
+                )}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <CircularProgress size={24} />
+              ) : editingReminder ? (
+                "Update Reminder"
+              ) : (
+                "Add Reminder"
+              )}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
