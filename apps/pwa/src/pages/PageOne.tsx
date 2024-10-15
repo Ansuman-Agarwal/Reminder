@@ -40,6 +40,7 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { trpcFetch } from "@/trpc/trpcFetch";
 import { useMediaQuery } from "react-responsive";
+import { useAuthContext } from "@/auth/useAuthContext";
 // Extend dayjs with UTC and timezone plugins
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -76,6 +77,8 @@ const commonTimezones = [
 ];
 
 export default function ReminderPage() {
+  const { user } = useAuthContext();
+  console.log(user);
   const [reminders, setReminders] = useState<ReminderType[]>([]);
   const [editingReminder, setEditingReminder] = useState<ReminderType | null>(
     null

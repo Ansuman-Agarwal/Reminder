@@ -5,6 +5,10 @@ import { app } from "./app";
 import { env } from "./configs/env.config";
 import schedule from "node-schedule";
 import { db } from "./db/db.config";
+import { scheduleJob } from "node-schedule";
+import { formatInTimeZone, toDate } from "date-fns-tz";
+import { isBefore } from "date-fns";
+import { sendNotification } from "./services/whatsapp.service";
 
 export const server = app;
 
@@ -21,10 +25,47 @@ server
   .register(sensible);
 
 const job = schedule.scheduleJob("* * * * *", async function () {
+  const serverNow = new Date();
+  const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // Fetch pending reminders
   const pendingReminders = await db.reminder
     .selectAll()
     .where({ status: "pending" });
-  console.log(pendingReminders);
+
+  const remindersToSend = [];
+  for (const reminder of pendingReminders) {
+    const reminderDate = toDate(reminder.dateTime, {
+      timeZone: reminder.timezone,
+    });
+    const reminderServerDate = toDate(
+      formatInTimeZone(reminderDate, serverTimezone, "yyyy-MM-dd'T'HH:mm:ssXXX")
+    );
+
+    if (isBefore(reminderServerDate, serverNow)) {
+      // Fetch user's WhatsApp number
+      const user = await db.user.findBy({ id: reminder.userId });
+
+      if (user && user.whatsappNumber) {
+        remindersToSend.push({
+          reminderId: reminder.id,
+          whatsappNumber: user.whatsappNumber,
+          title: reminder.title,
+          description: reminder.description || "",
+        });
+      }
+    }
+    if (remindersToSend.length > 0) {
+      // Send batch notifications
+      console.log("************ This reminder is ready to send ************");
+      await sendNotification(remindersToSend);
+      console.log(remindersToSend);
+    } else {
+      console.log(
+        "************** There are no reminders to send ***************"
+      );
+    }
+  }
   server.log.info("Jay is a good boy");
 });
 
