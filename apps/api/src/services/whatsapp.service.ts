@@ -28,7 +28,7 @@ export async function sendNotification(
     console.log("sending reminder", reminderInput);
 
     const { data }: { data: reminderResponseType } = await axios.post(
-      "http://localhost:8080/send-reminder",
+      process.env.WA_BE_SEND_MESSAGE_URL!,
       {
         reminderInput,
       }

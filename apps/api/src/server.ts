@@ -56,7 +56,6 @@ const job = schedule.scheduleJob("* * * * *", async function () {
       }
     }
     if (remindersToSend.length > 0) {
-      // Send batch notifications
       console.log("************ This reminder is ready to send ************");
       await sendNotification(remindersToSend);
       console.log(remindersToSend);

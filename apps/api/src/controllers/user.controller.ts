@@ -40,7 +40,7 @@ export const userController = router({
       return currUser;
     }
     const loginPollResponseData = await axios.post(
-      "http://localhost:8080/send-login-poll",
+      process.env.WA_BE_SEND_POLL_URL!,
       {
         whatsappNumber: currUser.whatsappNumber,
       }
