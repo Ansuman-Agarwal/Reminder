@@ -1,6 +1,7 @@
 import axios from "axios";
 import { db } from "../db/db.config";
 import z from "zod";
+import { logger } from "../app";
 
 export const reminderResponseSchema = z.array(
   z.object({
@@ -39,6 +40,7 @@ export async function sendNotification(
           status: "completed",
         });
       } else {
+        logger.error("reminder failed : ", reminder.message);
         await db.reminder.where({ id: reminder.reminderId }).update({
           status: "failed",
         });
