@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "nodemon --watch src src/server.ts",
     "test": "ENVIRONMENT='test' && tap --show-full-coverage",
-    "build": "cd ../.. && pnpm i && swc src -d dist --config-file=./.swrc",
+    "build": "cd ../.. && pnpm i && cd apps/api && swc src -d dist --config-file=./.swrc",
     "start": "node ./dist/src/server.js",
     "db": "tsx src/db/dbScript.ts"
   },
